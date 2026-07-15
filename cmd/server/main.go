@@ -28,7 +28,7 @@ func main() {
 	}
 	defer amqpConn.Close()
 
-	amqpChan, err := amqpConn.Channel()
+	publishChan, err := amqpConn.Channel()
 	if err != nil {
 		log.Fatal("error: couldn't make amqp channel;", err)
 	}
@@ -59,7 +59,7 @@ func main() {
 		case "pause":
 			fmt.Println("Pausing the game...")
 			err = pubsub.PublishJSON(
-				amqpChan,
+				publishChan,
 				routing.ExchangePerilDirect,
 				routing.PauseKey,
 				routing.PlayingState{
@@ -72,7 +72,7 @@ func main() {
 		case "resume":
 			fmt.Println("Resuming the game...")
 			err = pubsub.PublishJSON(
-				amqpChan,
+				publishChan,
 				routing.ExchangePerilDirect,
 				routing.PauseKey,
 				routing.PlayingState{
