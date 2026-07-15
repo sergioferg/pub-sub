@@ -53,7 +53,17 @@ func main() {
 		log.Fatalf("failed to subscribe to pause: %v", err)
 	}
 
-	fmt.Printf("Subscribed to move!\n")
+	err = pubsub.SubscribeJSON(
+		amqpConn,
+		routing.ExchangePerilTopic,
+		routing.WarRecognitionsPrefix,
+		routing.WarRecognitionsPrefix+".*",
+		pubsub.Durable,
+		handlerWar(gs),
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to war declarations: %v", err)
+	}
 
 	moveQueueName := fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, gs.GetUsername())
 	moveRoutingKey := fmt.Sprintf("%s.*", routing.ArmyMovesPrefix)
@@ -63,13 +73,11 @@ func main() {
 		moveQueueName,
 		moveRoutingKey,
 		pubsub.Transient,
-		handlerMove(gs),
+		handlerMove(gs, publishCh),
 	)
 	if err != nil {
 		log.Fatalf("failed to subscribe to move: %v", err)
 	}
-
-	fmt.Printf("Subscribed to pause!\n")
 
 	for {
 		words := gamelogic.GetInput()

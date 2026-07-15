@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -34,13 +35,16 @@ func DeclareAndBind(
 		return nil, amqp.Queue{}, fmt.Errorf("failed to open channel: %w", err)
 	}
 
+	table := amqp.Table{
+		"x-dead-letter-exchange": routing.ExchangePerilFanout,
+	}
 	connQueue, err := connChannel.QueueDeclare(
 		queueName,            // name
 		queueType == Durable, // durable
 		queueType != Durable, // delete when unused
 		queueType != Durable, // exclusive
 		false,                // no-wait
-		nil,                  // args
+		table,                // args
 	)
 	if err != nil {
 		connChannel.Close() // Prevent channel leak on error
@@ -113,16 +117,17 @@ func SubscribeJSON[T any](
 			ack := handler(target)
 			switch ack {
 			case Ack:
+				fmt.Println("ack")
 				msg.Ack(false)
-				fmt.Println("Ack")
 			case NackRequeue:
+				fmt.Println("nackrequeue")
 				msg.Nack(false, true)
-				fmt.Println("NackRequeue")
 			case NackDiscard:
+				fmt.Println("nackdiscard")
 				msg.Nack(false, false)
-				fmt.Println("NackDiscard")
 			default:
 				msg.Ack(true)
+				fmt.Println("something else?")
 			}
 
 		}
