@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	"github.com/joho/godotenv"
@@ -21,9 +20,9 @@ func main() {
 		log.Fatal("error: PORT must be set")
 	}
 
-	conString := fmt.Sprintf("amqp://guest:guest@localhost:%s/", port)
-	fmt.Println(conString)
-	amqpConn, err := amqp.Dial(conString)
+	connString := fmt.Sprintf("amqp://guest:guest@localhost:%s/", port)
+	fmt.Println(connString)
+	amqpConn, err := amqp.Dial(connString)
 	if err != nil {
 		log.Fatal("error: couldn't make amqp connection;", err)
 	}
@@ -36,17 +35,58 @@ func main() {
 
 	fmt.Println("Connection successful!")
 
-	err = pubsub.PublishJSON(amqpChan, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{
-		IsPaused: true,
-	})
+	routingKey := "game_logs.*"
+	_, queue, err := pubsub.DeclareAndBind(
+		amqpConn,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug,
+		routingKey,
+		pubsub.Durable,
+	)
 	if err != nil {
-		log.Fatal("error: couldn't publish json;", err)
+		log.Fatalf("could not subscribe to pause: %v", err)
 	}
+	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	gamelogic.PrintServerHelp()
 
-	receivedSignal := <-sigChan
-
-	fmt.Printf("\nReceived signal (%s). Program is shutting down...\n", receivedSignal)
+	for {
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
+			continue
+		}
+		switch words[0] {
+		case "pause":
+			fmt.Println("Pausing the game...")
+			err = pubsub.PublishJSON(
+				amqpChan,
+				routing.ExchangePerilDirect,
+				routing.PauseKey,
+				routing.PlayingState{
+					IsPaused: true,
+				},
+			)
+			if err != nil {
+				log.Fatal("error: couldn't publish json;", err)
+			}
+		case "resume":
+			fmt.Println("Resuming the game...")
+			err = pubsub.PublishJSON(
+				amqpChan,
+				routing.ExchangePerilDirect,
+				routing.PauseKey,
+				routing.PlayingState{
+					IsPaused: false,
+				},
+			)
+			if err != nil {
+				log.Fatal("error: couldn't publish json;", err)
+			}
+		case "quit":
+			fmt.Printf("Program is shutting down...\n")
+			return
+		default:
+			fmt.Printf("unknown command\n")
+		}
+	}
 }
