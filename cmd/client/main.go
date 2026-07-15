@@ -29,25 +29,46 @@ func main() {
 
 	fmt.Println("Connection successful!")
 
+	publishCh, err := amqpConn.Channel()
+	if err != nil {
+		log.Fatal("error: failed to make publish channel;", err)
+	}
+
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
 		log.Fatalf("error: welcoming client failed; %v", err)
 	}
 	gs := gamelogic.NewGameState(username)
 
-	queueName := fmt.Sprintf("%s.%s", routing.PauseKey, gs.GetUsername())
+	pauseQueueName := fmt.Sprintf("%s.%s", routing.PauseKey, gs.GetUsername())
 	err = pubsub.SubscribeJSON(
 		amqpConn,
 		routing.ExchangePerilDirect,
-		queueName,
+		pauseQueueName,
 		routing.PauseKey,
 		pubsub.Transient,
 		handlerPause(gs),
 	)
 	if err != nil {
-		log.Fatalf("could not subscribe to pause: %v", err)
+		log.Fatalf("failed to subscribe to pause: %v", err)
 	}
-	
+
+	fmt.Printf("Subscribed to move!\n")
+
+	moveQueueName := fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, gs.GetUsername())
+	moveRoutingKey := fmt.Sprintf("%s.*", routing.ArmyMovesPrefix)
+	err = pubsub.SubscribeJSON(
+		amqpConn,
+		routing.ExchangePerilTopic,
+		moveQueueName,
+		moveRoutingKey,
+		pubsub.Transient,
+		handlerMove(gs),
+	)
+	if err != nil {
+		log.Fatalf("failed to subscribe to move: %v", err)
+	}
+
 	fmt.Printf("Subscribed to pause!\n")
 
 	for {
@@ -65,11 +86,20 @@ func main() {
 			}
 
 		case "move":
-			_, err := gs.CommandMove(words)
+			mv, err := gs.CommandMove(words)
 			if err != nil {
 				fmt.Println("wrong command usage;", err)
+			}
+			err = pubsub.PublishJSON(
+				publishCh,
+				routing.ExchangePerilTopic,
+				moveRoutingKey,
+				mv,
+			)
+			if err != nil {
+				log.Fatal("error: couldn't publish json;", err)
 			} else {
-				fmt.Println("successful move")
+				fmt.Println("successful publish and move")
 			}
 
 		case "status":
