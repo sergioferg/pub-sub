@@ -59,7 +59,7 @@ func main() {
 		routing.WarRecognitionsPrefix,
 		routing.WarRecognitionsPrefix+".*",
 		pubsub.Durable,
-		handlerWar(gs),
+		handlerWar(gs, publishCh),
 	)
 	if err != nil {
 		log.Fatalf("could not subscribe to war declarations: %v", err)
@@ -89,6 +89,7 @@ func main() {
 			err := gs.CommandSpawn(words)
 			if err != nil {
 				fmt.Println("wrong command usage;", err)
+				continue
 			} else {
 				fmt.Println("successful spawn")
 			}
@@ -97,6 +98,7 @@ func main() {
 			mv, err := gs.CommandMove(words)
 			if err != nil {
 				fmt.Println("wrong command usage;", err)
+				continue
 			}
 			err = pubsub.PublishJSON(
 				publishCh,
@@ -106,6 +108,7 @@ func main() {
 			)
 			if err != nil {
 				log.Fatal("error: couldn't publish json;", err)
+				continue
 			} else {
 				fmt.Println("successful publish and move")
 			}

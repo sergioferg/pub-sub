@@ -66,20 +66,21 @@ func DeclareAndBind(
 	return connChannel, connQueue, nil
 }
 
-func SubscribeJSON[T any](
+func subscribe[T any](
 	conn *amqp.Connection,
 	exchange,
 	queueName,
 	key string,
-	queueType SimpleQueueType,
+	simpleQueueType SimpleQueueType,
 	handler func(T) AckType,
+	unmarshaller func([]byte) (T, error),
 ) error {
 	ch, queue, err := DeclareAndBind(
 		conn,
 		exchange,
 		queueName,
 		key,
-		queueType,
+		simpleQueueType,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to declare and bind queue: %v", err)
@@ -100,12 +101,6 @@ func SubscribeJSON[T any](
 		return fmt.Errorf("failed to register a consumer: %v", err)
 	}
 
-	unmarshaller := func(data []byte) (T, error) {
-		var target T
-		err := json.Unmarshal(data, &target)
-		return target, err
-	}
-
 	go func() {
 		defer ch.Close()
 		for msg := range msgs {
@@ -117,21 +112,46 @@ func SubscribeJSON[T any](
 			ack := handler(target)
 			switch ack {
 			case Ack:
-				fmt.Println("ack")
 				msg.Ack(false)
 			case NackRequeue:
-				fmt.Println("nackrequeue")
 				msg.Nack(false, true)
 			case NackDiscard:
-				fmt.Println("nackdiscard")
 				msg.Nack(false, false)
 			default:
 				msg.Ack(true)
-				fmt.Println("something else?")
+				fmt.Println("something bad happened?")
 			}
 
 		}
 	}()
 
 	return nil
+}
+
+func SubscribeJSON[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType SimpleQueueType,
+	handler func(T) AckType,
+) error {
+	unmarshaller := func(data []byte) (T, error) {
+		var target T
+		err := json.Unmarshal(data, &target)
+		return target, err
+	}
+
+	return subscribe(conn, exchange, queueName, key, queueType, handler, unmarshaller)
+}
+
+func SubscribeGob[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType SimpleQueueType,
+	handler func(T) AckType,
+) error {
+	return subscribe(conn, exchange, queueName, key, queueType, handler, decodeGob)
 }

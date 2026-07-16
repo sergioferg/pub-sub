@@ -36,17 +36,17 @@ func main() {
 	fmt.Println("Connection successful!")
 
 	routingKey := fmt.Sprintf("%s.*", routing.GameLogSlug)
-	_, queue, err := pubsub.DeclareAndBind(
+	err = pubsub.SubscribeGob(
 		amqpConn,
 		routing.ExchangePerilTopic,
 		routing.GameLogSlug,
 		routingKey,
 		pubsub.Durable,
+		handlerLog(),
 	)
 	if err != nil {
-		log.Fatalf("could not subscribe to pause: %v", err)
+		log.Fatalf("could not subscribe to logs: %v", err)
 	}
-	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
 	gamelogic.PrintServerHelp()
 

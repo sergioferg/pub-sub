@@ -18,3 +18,15 @@ func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
 		Body:        data,
 	})
 }
+
+func PublishGob[T any](ch *amqp.Channel, exchange, key string, val T) error {
+	data, err := encodeGob(val)
+	if err != nil {
+		return err
+	}
+
+	return ch.PublishWithContext(context.Background(), exchange, key, false, false, amqp.Publishing{
+		ContentType: "application/gob",
+		Body:        data,
+	})
+}
