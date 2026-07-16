@@ -88,6 +88,11 @@ func subscribe[T any](
 
 	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
+	err = ch.Qos(10, 0, false)
+	if err != nil {
+		return fmt.Errorf("failed to establish prefetch limit: %v", err)
+	}
+
 	msgs, err := ch.Consume(
 		queue.Name, // queue
 		"",         // consumer
